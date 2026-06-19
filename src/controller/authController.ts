@@ -128,14 +128,15 @@ export const registerAdmin = async (req: Request, res: Response) => {
   }
 }
 
+// FIX: Renamed destructured 'refreshToken' to 'token' to avoid shadowing the exported function name
 export const refreshToken = async (req: Request, res: Response) => {
-  const { refreshToken } = req.body
+  const { refreshToken: token } = req.body
   try {
-    if (!refreshToken) {
+    if (!token) {
       return res.status(400).json({ message: "Token required..!" })
     }
-    const payload = jwt.verify(refreshToken, JWT_REFRESH_SECRET)
-    const userId = payload.sub
+    const payload = jwt.verify(token, JWT_REFRESH_SECRET)
+    const userId = (payload as jwt.JwtPayload).sub
     const user = await UserModel.findById(userId)
     if (!user) {
       return res.status(403).json({ message: "Invalid or expire token" })

@@ -36,7 +36,8 @@ mongoose
     //   console.log("Server running on port: 50000")
     // })
   })
-  .catch((err) => console.error("Fail to connect DB..!"))
+  // FIX: log the actual error object so you can see what went wrong
+  .catch((err) => console.error("Fail to connect DB..!", err))
 
 app.listen(PORT, () => {
   console.log("Server running on port: ", PORT)
