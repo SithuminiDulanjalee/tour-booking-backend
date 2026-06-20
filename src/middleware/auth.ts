@@ -3,34 +3,31 @@ import jwt from "jsonwebtoken"
 import dotenv from "dotenv"
 
 dotenv.config()
+
 const JWT_SECRET = process.env.JWT_SECRET as string
 
 export interface AuthRequest extends Request {
-  user?: any
+  user?: jwt.JwtPayload
 }
 
-export const authenticate = (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) => {
+export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization
-  if (!authHeader) {
+
+  if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ message: "No token provided" })
   }
 
-  // "Bearer eyJyb2xlIjoiVVNFUiIsInVzZXJJZCI6IjgyNTJkMWM2LTRmZDItNGNhOS1iYjc0LTM5NGNh"
-  // ["Bearer", "eyJyb2xlIjoiVVNFUiIsInVzZXJJZCI6IjgyNTJkMWM2LTRmZDItNGNhOS1iYjc0LTM5NGNh"]
-  // 0, 1
   const token = authHeader.split(" ")[1]
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) // if token invalid trow error
-    // req modification ( add req object to payload , key name user)
+    if (!JWT_SECRET) {
+      return res.status(500).json({ message: "JWT_SECRET is missing" })
+    }
+
+    const payload = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload
     req.user = payload
     next()
   } catch (err) {
-    console.error(err)
-    res.status(401).json({ message: "Invalid or expire token..!" })
+    return res.status(401).json({ message: "Invalid or expired token" })
   }
 }

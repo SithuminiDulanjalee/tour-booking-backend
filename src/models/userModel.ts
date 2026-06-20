@@ -2,8 +2,7 @@ import { Document, model, Schema } from "mongoose"
 
 export enum UserRole {
   ADMIN = "ADMIN",
-  USER = "USER",
-  MANAGER = "MANAGER"
+  USER = "USER"
 }
 
 export interface IUser extends Document {
@@ -16,15 +15,15 @@ export interface IUser extends Document {
 
 const userSchema = new Schema<IUser>(
   {
-    name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    password: { type: String, required: true, minlength: 6 },
     roles: {
       type: [String],
       enum: Object.values(UserRole),
       default: [UserRole.USER]
     },
-    approved: { type: Boolean, default: false }
+    approved: { type: Boolean, default: true }
   },
   { timestamps: true }
 )
