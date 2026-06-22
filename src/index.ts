@@ -7,6 +7,7 @@ import express from "express"
 import mongoose from "mongoose"
 import authRoutes from "./routes/authRoutes"
 import bookingRoutes from "./routes/bookingRoutes"
+import paymentRoutes from "./routes/paymentRoutes"
 import tourRoutes from "./routes/tourRoutes"
 
 dotenv.config()
@@ -25,6 +26,7 @@ app.get("/", (_req, res) => {
 app.use("/api/v1/auth", authRoutes)
 app.use("/api/v1/tours", tourRoutes)
 app.use("/api/v1/bookings", bookingRoutes)
+app.use("/api/v1/payments", paymentRoutes)
 
 mongoose
   .connect(MONGO_URL)
