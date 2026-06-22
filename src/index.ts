@@ -5,6 +5,7 @@ import cors from "cors"
 import dotenv from "dotenv"
 import express from "express"
 import mongoose from "mongoose"
+import aiRoutes from "./routes/aiRoutes"
 import authRoutes from "./routes/authRoutes"
 import bookingRoutes from "./routes/bookingRoutes"
 import paymentRoutes from "./routes/paymentRoutes"
@@ -27,6 +28,7 @@ app.use("/api/v1/auth", authRoutes)
 app.use("/api/v1/tours", tourRoutes)
 app.use("/api/v1/bookings", bookingRoutes)
 app.use("/api/v1/payments", paymentRoutes)
+app.use("/api/v1/ai", aiRoutes)
 
 mongoose
   .connect(MONGO_URL)
