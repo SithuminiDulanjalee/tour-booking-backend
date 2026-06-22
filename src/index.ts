@@ -6,6 +6,8 @@ import dotenv from "dotenv"
 import express from "express"
 import mongoose from "mongoose"
 import authRoutes from "./routes/authRoutes"
+import bookingRoutes from "./routes/bookingRoutes"
+import tourRoutes from "./routes/tourRoutes"
 
 dotenv.config()
 
@@ -17,10 +19,12 @@ app.use(express.json())
 app.use(cors({ origin: true, credentials: true }))
 
 app.get("/", (_req, res) => {
-  res.json({ message: "API is running" })
+  res.json({ message: "VoyageVerde API is running" })
 })
 
 app.use("/api/v1/auth", authRoutes)
+app.use("/api/v1/tours", tourRoutes)
+app.use("/api/v1/bookings", bookingRoutes)
 
 mongoose
   .connect(MONGO_URL)
