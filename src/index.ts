@@ -12,6 +12,7 @@ import paymentRoutes from "./routes/paymentRoutes"
 import tourRoutes from "./routes/tourRoutes"
 
 dotenv.config()
+console.log("GROQ KEY loaded:", !!process.env.GROQ_API_KEY)
 
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -21,7 +22,7 @@ app.use(express.json())
 app.use(cors({ origin: true, credentials: true }))
 
 app.get("/", (_req, res) => {
-  res.json({ message: "VoyageVerde API is running" })
+  res.json({ message: "VoyaLink API is running" })
 })
 
 app.use("/api/v1/auth", authRoutes)
