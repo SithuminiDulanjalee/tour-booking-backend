@@ -13,12 +13,18 @@ export enum PaymentStatus {
   REFUNDED = "refunded"
 }
 
+export enum PaymentType {
+  ADVANCE = "advance",
+  BALANCE = "balance"
+}
+
 export interface IPayment extends Document {
   booking: Types.ObjectId
   user: Types.ObjectId
   amount: number
   method: PaymentMethod
   status: PaymentStatus
+  paymentType: PaymentType
   transactionId: string
   notes: string
 }
@@ -37,6 +43,11 @@ const paymentSchema = new Schema<IPayment>(
       type: String,
       enum: Object.values(PaymentStatus),
       default: PaymentStatus.COMPLETED
+    },
+    paymentType: {
+      type: String,
+      enum: Object.values(PaymentType),
+      required: true
     },
     transactionId: { type: String, default: "" },
     notes: { type: String, default: "" }

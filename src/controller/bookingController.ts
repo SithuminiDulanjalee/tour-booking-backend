@@ -1,6 +1,6 @@
 import { Response } from "express"
 import { AuthRequest } from "../middleware/auth"
-import { BookingModel, BookingStatus } from "../models/bookingModel"
+import { BookingModel, BookingStatus, PaymentStage } from "../models/bookingModel"
 import { TourModel } from "../models/tourModel"
 
 // USER: create a booking
@@ -20,6 +20,8 @@ export const createBooking = async (req: AuthRequest, res: Response) => {
     }
 
     const totalPrice = tour.price * Number(numberOfPeople)
+    // Advance is 30% of total price, rounded to nearest rupee
+    const advanceAmount = Math.round(totalPrice * 0.3)
 
     const booking = await BookingModel.create({
       tour: tourId,
@@ -27,7 +29,9 @@ export const createBooking = async (req: AuthRequest, res: Response) => {
       bookingDate: new Date(bookingDate),
       numberOfPeople: Number(numberOfPeople),
       totalPrice,
-      specialRequests: specialRequests || ""
+      advanceAmount,
+      specialRequests: specialRequests || "",
+      paymentStage: PaymentStage.UNPAID
     })
 
     // Reduce available slots after booking
@@ -69,7 +73,13 @@ export const cancelBooking = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "Booking is already cancelled" })
     }
 
-    // Restore the slots back to the tour
+    // Cannot cancel after full payment
+    if (booking.paymentStage === PaymentStage.FULLY_PAID) {
+      return res.status(400).json({
+        message: "Fully paid bookings cannot be cancelled. Please contact support."
+      })
+    }
+
     await TourModel.findByIdAndUpdate(booking.tour, {
       $inc: { availableSlots: booking.numberOfPeople }
     })
@@ -98,6 +108,7 @@ export const getAllBookings = async (req: AuthRequest, res: Response) => {
 }
 
 // ADMIN: update booking status
+// Confirm is only allowed when paymentStage is advance_paid
 export const updateBookingStatus = async (req: AuthRequest, res: Response) => {
   try {
     const { status } = req.body
@@ -106,17 +117,27 @@ export const updateBookingStatus = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "Invalid status value" })
     }
 
-    const booking = await BookingModel.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    )
+    const booking = await BookingModel.findById(req.params.id)
+    if (!booking) return res.status(404).json({ message: "Booking not found" })
+
+    // Admin can only confirm a booking if advance payment has been made
+    if (
+      status === BookingStatus.CONFIRMED &&
+      booking.paymentStage === PaymentStage.UNPAID
+    ) {
+      return res.status(400).json({
+        message: "Cannot confirm booking. User has not paid the advance amount yet."
+      })
+    }
+
+    booking.status = status as BookingStatus
+    await booking.save()
+
+    const updated = await BookingModel.findById(booking._id)
       .populate("tour", "title location")
       .populate("user", "name email")
 
-    if (!booking) return res.status(404).json({ message: "Booking not found" })
-
-    return res.status(200).json({ message: "Status updated", data: booking })
+    return res.status(200).json({ message: "Status updated", data: updated })
   } catch (err) {
     return res.status(500).json({ message: "Failed to update booking status" })
   }

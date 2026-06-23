@@ -1,18 +1,15 @@
 import { Response } from "express"
 import { AuthRequest } from "../middleware/auth"
-import { BookingModel } from "../models/bookingModel"
-import { PaymentModel, PaymentStatus } from "../models/paymentModel"
+import { BookingModel, BookingStatus, PaymentStage } from "../models/bookingModel"
+import {
+  PaymentModel,
+  PaymentStatus,
+  PaymentType
+} from "../models/paymentModel"
 
-// Helper: get total completed payments for a booking
-const getPaidAmount = async (bookingId: string): Promise<number> => {
-  const payments = await PaymentModel.find({
-    booking: bookingId,
-    status: PaymentStatus.COMPLETED
-  })
-  return payments.reduce((sum, p) => sum + p.amount, 0)
-}
+// All amounts are in LKR (Sri Lanka Rupees)
 
-// USER: make a payment for a booking
+// USER: make a payment (advance or balance)
 export const createPayment = async (req: AuthRequest, res: Response) => {
   try {
     const { bookingId, amount, method, notes } = req.body
@@ -26,47 +23,77 @@ export const createPayment = async (req: AuthRequest, res: Response) => {
       user: req.user?.sub
     })
 
-    if (!booking) {
-      return res.status(404).json({ message: "Booking not found" })
-    }
+    if (!booking) return res.status(404).json({ message: "Booking not found" })
 
-    if (booking.status === "cancelled") {
+    if (booking.status === BookingStatus.CANCELLED) {
       return res.status(400).json({ message: "Cannot pay for a cancelled booking" })
     }
 
-    const alreadyPaid = await getPaidAmount(bookingId)
-    const remaining = booking.totalPrice - alreadyPaid
+    const paidAmount = Number(amount)
 
-    if (remaining <= 0) {
-      return res.status(400).json({ message: "This booking is already fully paid" })
-    }
-
-    if (Number(amount) > remaining) {
-      return res.status(400).json({
-        message: `Payment exceeds remaining balance of $${remaining.toFixed(2)}`
-      })
-    }
-
-    if (Number(amount) <= 0) {
+    if (paidAmount <= 0) {
       return res.status(400).json({ message: "Amount must be greater than zero" })
     }
 
-    // Generate a simple transaction ID (no payment gateway needed)
+    let paymentType: PaymentType
+    let expectedAmount: number
+
+    // ADVANCE PAYMENT: only allowed when paymentStage is unpaid
+    if (booking.paymentStage === PaymentStage.UNPAID) {
+      paymentType = PaymentType.ADVANCE
+      expectedAmount = booking.advanceAmount
+
+      if (paidAmount !== expectedAmount) {
+        return res.status(400).json({
+          message: `Advance payment must be exactly LKR ${expectedAmount.toLocaleString("en-LK")}`
+        })
+      }
+
+    // BALANCE PAYMENT: only allowed when booking is confirmed and advance is paid
+    } else if (booking.paymentStage === PaymentStage.ADVANCE_PAID) {
+      if (booking.status !== BookingStatus.CONFIRMED) {
+        return res.status(400).json({
+          message: "Balance payment is only available after the admin confirms your booking."
+        })
+      }
+
+      paymentType = PaymentType.BALANCE
+      expectedAmount = booking.totalPrice - booking.advanceAmount
+
+      if (paidAmount !== expectedAmount) {
+        return res.status(400).json({
+          message: `Balance payment must be exactly LKR ${expectedAmount.toLocaleString("en-LK")}`
+        })
+      }
+
+    } else {
+      return res.status(400).json({ message: "This booking is already fully paid." })
+    }
+
     const transactionId = `TXN-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`
 
     const payment = await PaymentModel.create({
       booking: bookingId,
       user: req.user?.sub,
-      amount: Number(amount),
+      amount: paidAmount,
       method,
       status: PaymentStatus.COMPLETED,
+      paymentType,
       transactionId,
       notes: notes || ""
     })
 
+    // Update paymentStage on the booking
+    if (paymentType === PaymentType.ADVANCE) {
+      booking.paymentStage = PaymentStage.ADVANCE_PAID
+    } else if (paymentType === PaymentType.BALANCE) {
+      booking.paymentStage = PaymentStage.FULLY_PAID
+    }
+    await booking.save()
+
     const populated = await payment.populate({
       path: "booking",
-      select: "totalPrice status",
+      select: "totalPrice advanceAmount status paymentStage",
       populate: { path: "tour", select: "title location" }
     })
 
@@ -82,7 +109,7 @@ export const getMyPayments = async (req: AuthRequest, res: Response) => {
     const payments = await PaymentModel.find({ user: req.user?.sub })
       .populate({
         path: "booking",
-        select: "totalPrice status bookingDate numberOfPeople",
+        select: "totalPrice advanceAmount status paymentStage bookingDate numberOfPeople",
         populate: { path: "tour", select: "title location image" }
       })
       .sort({ createdAt: -1 })
@@ -101,9 +128,7 @@ export const getBookingPaymentSummary = async (req: AuthRequest, res: Response) 
       user: req.user?.sub
     }).populate("tour", "title location image price duration")
 
-    if (!booking) {
-      return res.status(404).json({ message: "Booking not found" })
-    }
+    if (!booking) return res.status(404).json({ message: "Booking not found" })
 
     const payments = await PaymentModel.find({
       booking: req.params.bookingId,
@@ -111,6 +136,7 @@ export const getBookingPaymentSummary = async (req: AuthRequest, res: Response) 
     }).sort({ createdAt: -1 })
 
     const paidAmount = payments.reduce((sum, p) => sum + p.amount, 0)
+    const balanceAmount = booking.totalPrice - booking.advanceAmount
     const remainingAmount = booking.totalPrice - paidAmount
 
     return res.status(200).json({
@@ -120,9 +146,12 @@ export const getBookingPaymentSummary = async (req: AuthRequest, res: Response) 
         payments,
         summary: {
           totalPrice: booking.totalPrice,
+          advanceAmount: booking.advanceAmount,
+          balanceAmount,
           paidAmount,
           remainingAmount,
-          isFullyPaid: remainingAmount <= 0
+          paymentStage: booking.paymentStage,
+          isFullyPaid: booking.paymentStage === PaymentStage.FULLY_PAID
         }
       }
     })
@@ -138,7 +167,7 @@ export const getAllPayments = async (req: AuthRequest, res: Response) => {
       .populate("user", "name email")
       .populate({
         path: "booking",
-        select: "totalPrice status",
+        select: "totalPrice advanceAmount status paymentStage",
         populate: { path: "tour", select: "title location" }
       })
       .sort({ createdAt: -1 })
@@ -149,7 +178,7 @@ export const getAllPayments = async (req: AuthRequest, res: Response) => {
   }
 }
 
-// ADMIN: update payment status
+// ADMIN: update payment status (e.g. mark as refunded)
 export const updatePaymentStatus = async (req: AuthRequest, res: Response) => {
   try {
     const { status } = req.body
@@ -164,7 +193,7 @@ export const updatePaymentStatus = async (req: AuthRequest, res: Response) => {
       { new: true }
     )
       .populate("user", "name email")
-      .populate("booking", "totalPrice")
+      .populate("booking", "totalPrice advanceAmount paymentStage")
 
     if (!payment) return res.status(404).json({ message: "Payment not found" })
 
@@ -183,6 +212,22 @@ export const getPaymentStats = async (req: AuthRequest, res: Response) => {
       .filter((p) => p.status === PaymentStatus.COMPLETED)
       .reduce((sum, p) => sum + p.amount, 0)
 
+    const advanceRevenue = allPayments
+      .filter(
+        (p) =>
+          p.status === PaymentStatus.COMPLETED &&
+          p.paymentType === PaymentType.ADVANCE
+      )
+      .reduce((sum, p) => sum + p.amount, 0)
+
+    const balanceRevenue = allPayments
+      .filter(
+        (p) =>
+          p.status === PaymentStatus.COMPLETED &&
+          p.paymentType === PaymentType.BALANCE
+      )
+      .reduce((sum, p) => sum + p.amount, 0)
+
     const refundedAmount = allPayments
       .filter((p) => p.status === PaymentStatus.REFUNDED)
       .reduce((sum, p) => sum + p.amount, 0)
@@ -196,6 +241,8 @@ export const getPaymentStats = async (req: AuthRequest, res: Response) => {
       message: "Stats fetched",
       data: {
         totalRevenue,
+        advanceRevenue,
+        balanceRevenue,
         refundedAmount,
         totalTransactions,
         completedCount

@@ -6,13 +6,21 @@ export enum BookingStatus {
   CANCELLED = "cancelled"
 }
 
+export enum PaymentStage {
+  UNPAID = "unpaid",
+  ADVANCE_PAID = "advance_paid",
+  FULLY_PAID = "fully_paid"
+}
+
 export interface IBooking extends Document {
   tour: Types.ObjectId
   user: Types.ObjectId
   bookingDate: Date
   numberOfPeople: number
   totalPrice: number
+  advanceAmount: number
   status: BookingStatus
+  paymentStage: PaymentStage
   specialRequests: string
 }
 
@@ -23,10 +31,17 @@ const bookingSchema = new Schema<IBooking>(
     bookingDate: { type: Date, required: true },
     numberOfPeople: { type: Number, required: true, min: 1 },
     totalPrice: { type: Number, required: true },
+    // 30% of totalPrice — calculated on create
+    advanceAmount: { type: Number, required: true },
     status: {
       type: String,
       enum: Object.values(BookingStatus),
       default: BookingStatus.PENDING
+    },
+    paymentStage: {
+      type: String,
+      enum: Object.values(PaymentStage),
+      default: PaymentStage.UNPAID
     },
     specialRequests: { type: String, default: "" }
   },
