@@ -23,13 +23,13 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://tour-booking-frontend-sigma.vercel.app"
+      "https://tour-booking-frontend-sigma.vercel.app/"
     ],
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
   })
 )
-app.use(cors())
 
 app.get("/", (_req, res) => {
   res.json({ message: "VoyaLink API is running" })
