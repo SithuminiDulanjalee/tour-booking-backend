@@ -30,7 +30,6 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"]
   })
 )
-app.options("*", cors())
 
 app.get("/", (_req, res) => {
   res.json({ message: "VoyaLink API is running" })
