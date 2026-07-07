@@ -25,7 +25,7 @@ REST API for the VoyaLink Sri Lanka tour booking platform, built with Node.js, E
 ---
 
 ## Project Structure
-
+```
 src/
 ├── config/                       # Reserved for future config
 ├── controller/
@@ -51,7 +51,7 @@ src/
 ├── utils/
 │   └── tokens.ts                 # JWT sign helpers
 └── index.ts                      # App entry point
-
+```
 ---
 
 ## Setup & Run
